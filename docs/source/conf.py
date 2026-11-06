@@ -55,7 +55,7 @@ autodoc_member_order = "bysource"
 sphinx_gallery_conf = {
     "examples_dirs": "../../examples",  # Path to example scripts
     "gallery_dirs": "auto_examples",  # Where to save generated gallery
-    "filename_pattern": "/demo_",  # Only process files starting with demo_
+    "filename_pattern": "/plot_",  # Only process files starting with plot_
     "ignore_pattern": r"__init__\.py",  # Ignore __init__.py
     "plot_gallery": False,  # Don't execute examples (they need sample data)
     "download_all_examples": False,  # Don't create a zip of all examples
