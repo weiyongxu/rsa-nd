@@ -34,10 +34,9 @@ keywords = [
 ]
 
 dependencies = [
-  "mne>=1.7",
-  # rsa-nd uses a few private mne-rsa helpers (_get_in_radius,
-  # _get_distance_matrix) so its searchlights match mne-rsa exactly.
-  # tests/test_mne_rsa_contract.py guards them; the upper bound stops a future
+  "mne>=1.8",
+  # rsa-nd uses the private mne_rsa.source_level._get_distance_matrix, so that
+  # source searchlights match mne-rsa exactly. The upper bound stops a future
   # major release from breaking installed copies.
   "mne-rsa>=1.0,<2",
   "numpy",
@@ -63,11 +62,6 @@ dev = [
   "furo>=2025.9.25",
   "sphinx-gallery>=0.20.0",
   "pillow>=12.0.0",
-  # Off-screen 3D rendering in the source ROI demo.
-  "ipyevents",
-  "ipywidgets",
-  # Simulated physiology in the dynamic RSA demo.
-  "neurokit2",
 ]
 
 # mne-rsa pulls pyside6; >=6.10 only ships manylinux_2_34 wheels, which

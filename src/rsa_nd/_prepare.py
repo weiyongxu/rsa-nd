@@ -1,633 +1,454 @@
-"""Public Layer 1 entry point: ``prepare_rsa_data``.
+"""Turn MNE objects and arrays into the named feature tensor used for RSA."""
 
-Converts MNE input or already-abstract data into a typed ``PreparedRsaData``
-that downstream callers (``rsa_nd``, ``rsa_dynamic``) consume as a single
-positional.
+from collections.abc import Mapping
+from numbers import Number
 
-``prepare_rsa_data`` detects the input kind and extracts the named-axis data,
-MNE template, item labels, and spatial geometry in one branch per input family
-(:func:`_extract_input`); the shared finalizers in :mod:`._features` absorb the
-common feature pipeline. ``picks`` is applied once, by the matching sensor
-branch.
-"""
-
-from __future__ import annotations
-
-import inspect
-from collections.abc import Mapping, Sequence
-from typing import Any, NoReturn
-
+import mne
 import numpy as np
-
-from ._features import (
-    _is_named_range_spec,
-    aggregate_space_groups,
-    finalize_spectral_rsa,
-    prepare_time_domain_rsa,
-    resolve_element_groups,
-)
-from ._source import (
-    build_source_space,
-    check_source_estimates_compatible,
-)
-from ._types import (
-    AggFunc,
-    AxisGroups,
-    AxisSpec,
+from mne.time_frequency import (
+    AverageTFR,
     EpochsSpectrum,
     EpochsTFR,
-    GroupReduceMode,
-    PreparedRsaData,
-    RsaData,
-    RsaInputKind,
-    RsaPrepOptions,
-    RsaTemplate,
-    SensorSpace,
-    SpaceDescription,
-    StandardizeMode,
-    TfrFeatureMode,
+    Spectrum,
+    tfr_array_morlet,
 )
 
+from ._data import PreparedRsaData, RsaData, SensorSpace, SourceSpace
 
-# --------------------------------------------------------------------------- #
-# Input extraction helpers
-# --------------------------------------------------------------------------- #
-def _pick(obj: Any, picks: Any) -> Any:
-    """Apply a within-object channel pick once (identity when ``picks`` is None)."""
-    if picks is None:
-        return obj
-    return obj.copy().pick(picks, exclude="bads")
-
-
-def _pick_sequence(objs: Any, picks: Any) -> list[Any]:
-    """Pick each element of a per-item sensor sequence (identity when None)."""
-    objs = list(objs)
-    if picks is None:
-        return objs
-    return [obj.copy().pick(picks, exclude="bads") for obj in objs]
+_SINGLE_TYPES = (mne.BaseEpochs, EpochsSpectrum, EpochsTFR)
+_SOURCE_TYPES = (mne.SourceEstimate, mne.VolSourceEstimate)
+_ITEM_TYPES = (mne.Evoked, Spectrum, AverageTFR, *_SOURCE_TYPES)
+_AGGREGATORS = ("mean", "median", "sum", "min", "max")
+_MODES = ("aggregate", "elements")
+_COMPONENTS = {
+    "real_imag": ("real", "imag"),
+    "amp_phase": ("amplitude", "sin_phase", "cos_phase"),
+    "phase": ("sin_phase", "cos_phase"),
+}
 
 
-def _reject_spectral_tfr(tfr: Mapping[str, Any] | None, kind: str) -> None:
-    """Raise if ``tfr={...}`` is combined with already-spectral input."""
-    if tfr is not None:
-        raise ValueError(
-            "tfr= cannot be combined with already-spectral input "
-            f"({kind}); the input is already in the frequency domain."
-        )
-
-
-def _check_sensor_sequence_compatible(objs: list[Any]) -> None:
-    """Raise unless every sequence element shares the first's channel names."""
-    ref_names = list(objs[0].ch_names)
-    for idx, obj in enumerate(objs[1:], 1):
-        if list(obj.ch_names) != ref_names:
-            raise ValueError(
-                "All sequence elements must share channel names; element "
-                f"{idx} differs from element 0."
-            )
-
-
-def _epochs_item_values(obj: Any) -> np.ndarray:
-    """Per-epoch item coordinates: the original selection when intact, else
-    a plain index range."""
-    selection = getattr(obj, "selection", None)
-    if selection is not None and len(selection) == len(obj):
-        return np.asarray(selection)
-    return np.arange(len(obj))
-
-
-def _events_to_item_labels(inst_or_data: Any) -> np.ndarray | None:
-    """Read item labels from MNE events at prepare time."""
-    events = getattr(inst_or_data, "events", None)
-    if events is None:
-        return None
-    events_arr = np.asarray(events)
-    if events_arr.ndim != 2 or events_arr.shape[1] < 3:
-        return None
-    return events_arr[:, 2]
-
-
-def _build_sensor_space(
-    obj: Any,
-    space_arg: Any,
-) -> SensorSpace:
-    channel_names = tuple(obj.ch_names)
-    info = obj.info
-
-    if space_arg is None:
-        return SensorSpace(
-            channel_names=channel_names,
-            info=info,
-            patches=None,
-            is_grouped=False,
-        )
-
-    if isinstance(space_arg, Mapping):
-        name_to_idx = {name: idx for idx, name in enumerate(channel_names)}
-        patches: dict[str, np.ndarray] = {}
-        for group_name, members in space_arg.items():
-            unknown = [m for m in members if m not in name_to_idx]
-            if unknown:
-                raise ValueError(
-                    f"Group {group_name!r} references unknown channels: {unknown}."
-                )
-            patches[str(group_name)] = np.asarray(
-                [name_to_idx[m] for m in members], dtype=int
-            )
-        return SensorSpace(
-            channel_names=channel_names,
-            info=info,
-            patches=patches,
-            is_grouped=True,
-        )
-
-    raise TypeError(
-        "space= for sensor input must be None or Mapping[str, Sequence[str]]; "
-        f"got {type(space_arg).__name__}."
-    )
-
-
-def _raise_unsupported_input(inst_or_data: Any) -> NoReturn:
-    """Raise ``TypeError`` with a targeted hint for near-miss source inputs."""
-    if isinstance(inst_or_data, (list, tuple)) and inst_or_data:
-        try:
-            from mne import (
-                MixedSourceEstimate,
-                VectorSourceEstimate,
-                VolVectorSourceEstimate,
-            )
-
-            vector_mixed = (
-                VectorSourceEstimate,
-                VolVectorSourceEstimate,
-                MixedSourceEstimate,
-            )
-        except ImportError:
-            vector_mixed = ()
-        if vector_mixed and isinstance(inst_or_data[0], vector_mixed):
-            raise TypeError(
-                "Vector and mixed source estimates are not supported; RSA "
-                "expects scalar per-vertex data. Convert first, e.g. "
-                "stc.magnitude() for a VectorSourceEstimate."
-            )
-    raise TypeError(
-        "inst_or_data must be RsaData, ndarray, EpochsSpectrum, EpochsTFR, "
-        "Epochs, Sequence[Evoked], Sequence[Spectrum], Sequence[AverageTFR], "
-        f"or Sequence[SourceEstimate]; got {type(inst_or_data).__name__}."
-    )
-
-
-# --------------------------------------------------------------------------- #
-# Input-kind dispatch
-# --------------------------------------------------------------------------- #
-def _extract_input(
-    inst_or_data: Any,
-    opts: RsaPrepOptions,
-    *,
-    picks: Any,
-    space_arg: Any,
-    src: Any,
-) -> tuple[
-    RsaInputKind,
-    RsaData,
-    RsaTemplate,
-    np.ndarray | None,
-    SpaceDescription | None,
-]:
-    """Detect the input kind and extract everything Layer 2 needs.
-
-    Returns ``(input_kind, rsa_data, template, item_labels, space)``. One
-    branch per input family; the shared finalizers ``prepare_time_domain_rsa``
-    and ``finalize_spectral_rsa`` absorb the common feature pipeline. ``tfr=``
-    is rejected for inputs already in the frequency domain (and for abstract
-    arrays, which carry no MNE timing); time-domain inputs (Epochs / Evokeds /
-    source estimates) accept it and compute an on-the-fly Morlet TFR. ``picks``
-    is applied exactly once, by the sensor branches only.
-    """
-
-    # Abstract array / RsaData: no MNE template, picks is a no-op, no geometry.
-    # An ndarray is just an RsaData the caller did not wrap by hand.
-    if isinstance(inst_or_data, (RsaData, np.ndarray)):
-        if opts.tfr is not None:
-            raise ValueError(
-                "tfr= is not supported for abstract array / RsaData input "
-                "in this refactor: arrays do not carry MNE timing semantics. "
-                "Compute TFR with mne.time_frequency.tfr_array_morlet first "
-                "and pass the result with tfr_feature= instead."
-            )
-        if space_arg is not None:
-            raise ValueError(
-                "space= is not supported for abstract array / RsaData input. "
-                "Wrap the array in an MNE container first when spatial "
-                "Searchlight geometry should be interpreted as sensor or source "
-                "space."
-            )
-        rsa_data = finalize_spectral_rsa(
-            inst_or_data, axes=opts.axes, coords=opts.coords, picks=None, opts=opts
-        )
-        return "rsa_data", rsa_data, None, None, None
-
-    try:
-        from mne import BaseEpochs, Evoked, SourceEstimate, VolSourceEstimate
-        from mne.time_frequency import (
-            AverageTFR,
-            EpochsSpectrum,
-            EpochsTFR,
-            Spectrum,
-        )
-    except ImportError:
-        _raise_unsupported_input(inst_or_data)
-
-    # Within-object sensor input: items are the first axis of one MNE object.
-    if isinstance(inst_or_data, BaseEpochs):
-        working = _pick(inst_or_data, picks)
-        rsa_data = prepare_time_domain_rsa(
-            np.asarray(working.get_data()),
-            item_coords=_epochs_item_values(working),
-            space_coords=np.asarray(working.ch_names, dtype=object),
-            times=np.asarray(working.times, dtype=float),
-            sfreq=float(working.info["sfreq"]),
-            opts=opts,
-        )
-        return (
-            "epochs",
-            rsa_data,
-            working,
-            _events_to_item_labels(working),
-            _build_sensor_space(working, space_arg),
-        )
-
-    if isinstance(inst_or_data, (EpochsSpectrum, EpochsTFR)):
-        kind: RsaInputKind = (
-            "epochs_spectrum"
-            if isinstance(inst_or_data, EpochsSpectrum)
-            else "epochs_tfr"
-        )
-        _reject_spectral_tfr(opts.tfr, kind)
-        working = _pick(inst_or_data, picks)
-        rsa_data = finalize_spectral_rsa(
-            working, axes=opts.axes, coords=opts.coords, picks=None, opts=opts
-        )
-        return (
-            kind,
-            rsa_data,
-            working,
-            _events_to_item_labels(working),
-            _build_sensor_space(working, space_arg),
-        )
-
-    # Sequence inputs: each element of the sequence is one item.
-    if isinstance(inst_or_data, (list, tuple)) and len(inst_or_data) > 0:
-        first = inst_or_data[0]
-
-        if isinstance(first, Evoked):
-            working = _pick_sequence(inst_or_data, picks)
-            _check_sensor_sequence_compatible(working)
-            ref = working[0]
-            rsa_data = prepare_time_domain_rsa(
-                np.stack([np.asarray(ev.data) for ev in working], axis=0),
-                item_coords=np.arange(len(working)),
-                space_coords=np.asarray(ref.ch_names, dtype=object),
-                times=np.asarray(ref.times, dtype=float),
-                sfreq=float(ref.info["sfreq"]),
-                opts=opts,
-            )
-            return "evokeds", rsa_data, ref, None, _build_sensor_space(ref, space_arg)
-
-        if isinstance(first, Spectrum):
-            _reject_spectral_tfr(opts.tfr, "spectrums")
-            working = _pick_sequence(inst_or_data, picks)
-            _check_sensor_sequence_compatible(working)
-            ref = working[0]
-            rsa_data = finalize_spectral_rsa(
-                np.stack([np.asarray(sp.get_data()) for sp in working], axis=0),
-                axes=("item", "space", "freq"),
-                coords={
-                    "item": np.arange(len(working)),
-                    "space": np.asarray(ref.ch_names, dtype=object),
-                    "freq": np.asarray(ref.freqs, dtype=float),
-                },
-                picks=None,
-                opts=opts,
-            )
-            return "spectrums", rsa_data, ref, None, _build_sensor_space(ref, space_arg)
-
-        if isinstance(first, AverageTFR):
-            _reject_spectral_tfr(opts.tfr, "average_tfrs")
-            working = _pick_sequence(inst_or_data, picks)
-            _check_sensor_sequence_compatible(working)
-            ref = working[0]
-            rsa_data = finalize_spectral_rsa(
-                np.stack([np.asarray(tfr.data) for tfr in working], axis=0),
-                axes=("item", "space", "freq", "time"),
-                coords={
-                    "item": np.arange(len(working)),
-                    "space": np.asarray(ref.ch_names, dtype=object),
-                    "freq": np.asarray(ref.freqs, dtype=float),
-                    "time": np.asarray(ref.times, dtype=float),
-                },
-                picks=None,
-                opts=opts,
-            )
-            return (
-                "average_tfrs",
-                rsa_data,
-                ref,
-                None,
-                _build_sensor_space(ref, space_arg),
-            )
-
-        if isinstance(first, (SourceEstimate, VolSourceEstimate)):
-            stcs = list(inst_or_data)
-            check_source_estimates_compatible(stcs)
-            ref = stcs[0]
-            data = np.stack([np.asarray(stc.data) for stc in stcs], axis=0)
-            rsa_data = prepare_time_domain_rsa(
-                data,
-                item_coords=np.arange(len(stcs)),
-                space_coords=np.arange(data.shape[1]),
-                times=np.asarray(ref.times, dtype=float),
-                sfreq=1.0 / float(ref.tstep),
-                opts=opts,
-            )
-            space = build_source_space(stcs, space_arg=space_arg, src=src)
-            return "source_estimates", rsa_data, ref, None, space
-
-    _raise_unsupported_input(inst_or_data)
-
-
-# --------------------------------------------------------------------------- #
-# Public entry point
-# --------------------------------------------------------------------------- #
 def prepare_rsa_data(
-    inst_or_data: RsaData | EpochsSpectrum | EpochsTFR | np.ndarray,
+    inst,
     *,
-    axes: Sequence[str] | None = None,
-    coords: Mapping[str, Sequence[Any]] | None = None,
-    time: AxisSpec = None,
-    time_mode: GroupReduceMode = "aggregate",
-    freq: AxisSpec = None,
-    freq_mode: GroupReduceMode = "aggregate",
-    space: Any | None = None,
-    space_mode: GroupReduceMode = "elements",
-    picks: Any = "data",
-    tfr: Mapping[str, Any] | None = None,
-    tfr_feature: TfrFeatureMode = "power",
-    log: bool = False,
-    log_floor: float | None = None,
-    standardize: StandardizeMode = None,
-    range_closed: str | None = None,
-    agg: AggFunc = "mean",
-    src: Any | None = None,
-) -> PreparedRsaData:
-    """Convert an MNE input or array into a typed `PreparedRsaData`.
+    axes=None,
+    coords=None,
+    time=None,
+    time_mode="aggregate",
+    freq=None,
+    freq_mode="aggregate",
+    space=None,
+    space_mode="elements",
+    picks="data",
+    tfr=None,
+    tfr_feature="power",
+    log=False,
+    log_floor=None,
+    standardize=None,
+    range_closed=None,
+    agg="mean",
+    src=None,
+):
+    """Build the feature tensor for RSA.
 
     Parameters
     ----------
-    inst_or_data
-        One of: ``RsaData``, ``np.ndarray``, ``mne.Epochs``,
-        ``EpochsSpectrum``, ``EpochsTFR``, ``Sequence[mne.Evoked]``,
-        ``Sequence[mne.time_frequency.Spectrum]``,
-        ``Sequence[mne.time_frequency.AverageTFR]``, or
-        ``Sequence[SourceEstimate | VolSourceEstimate]``. For the sequence
-        inputs each element is one item.
-    time_mode, freq_mode, space_mode
-        How a grouped axis is reduced -- the unified grouping vocabulary shared
-        by all three axes. ``"aggregate"`` averages each named group's members
-        (with ``agg``) into one value, collapsing the native axis into a coarse
-        categorical axis at prep time: ``time`` -> ``"window"``, ``freq`` ->
-        ``"band"``, ``space`` -> ``"roi"`` (and ``space`` then drops its
-        per-element geometry). ``"elements"`` instead keeps every member as a
-        joint feature so each group is one searchlight patch with a multivariate
-        RDM (one RSA per group when the axis is searched). Defaults are
-        history-driven: ``time_mode``/``freq_mode`` default ``"aggregate"`` and
-        ``space_mode`` defaults ``"elements"``. ``time_mode``/``freq_mode`` only
-        apply to a named-range mapping (e.g. ``time={"early": (0, 0.2)}``);
-        ``space_mode`` only applies to a grouped ``space=``.
-    src
-        Optional ``mne.SourceSpaces``. Carried on the source
-        `SpaceDescription` so a spatial radius search can measure geodesic
-        distance in meters; only needed when ``inst_or_data`` is a sequence of
-        source estimates and a non-grouped spatial searchlight is requested.
+    inst : instance of Epochs | EpochsTFR | EpochsSpectrum | RsaData | ndarray | list
+        The data. A list holds one ``Evoked``, ``Spectrum``, ``AverageTFR``,
+        ``SourceEstimate`` or ``VolSourceEstimate`` per item.
+    axes : sequence of str | None
+        Axis names. Required when ``inst`` is an array.
+    coords : dict | None
+        Axis coordinates for an array ``inst``.
+    time : tuple | dict | None
+        Either ``(start, stop)`` to keep part of the axis, or
+        ``{"name": (start, stop), ...}`` for named groups (see ``time_mode``).
+    time_mode : str
+        How named groups are used, for ``time``, ``freq`` and ``space`` alike.
+        ``"aggregate"`` reduces each group to one value with ``agg``, turning the
+        axis into ``"window"``, ``"band"`` or ``"roi"``. ``"elements"`` keeps every
+        member as a feature, so each group is one searchlight position; the axis
+        must then be searched.
+    freq : tuple | dict | None
+        Same as ``time``, for frequency.
+    freq_mode : str
+        See ``time_mode``.
+    space : dict | list of Label | None
+        Named groups. For sensors, a mapping from group name to channel names.
+        For source estimates, a list of labels, or a mapping from group name to
+        labels (or to vertex numbers, for volume source spaces).
+    space_mode : str
+        See ``time_mode``.
+    picks : str | list | None
+        Channels to use for sensor input. Bad channels are excluded unless
+        ``picks`` is ``None``.
+    tfr : dict | None
+        Arguments for :func:`mne.time_frequency.tfr_array_morlet`, to compute a
+        time-frequency representation of time-domain MNE input. Must hold
+        ``"freqs"``.
+    tfr_feature : str
+        Real-valued feature for complex data: ``"power"``, ``"amplitude"``,
+        ``"real_imag"``, ``"amp_phase"`` or ``"phase"``. The last three add a
+        ``"component"`` axis.
+    log : bool
+        Whether to take the log10 before reducing ranges and groups.
+    log_floor : float | None
+        Smallest value to take the log of. By default, one millionth of the
+        median positive value.
+    standardize : str | None
+        Use ``"features"`` to z-score each feature across items, as the last step.
+    range_closed : str | None
+        Which ends of a range to include: ``"both"``, ``"left"``, ``"right"`` or
+        ``"neither"``. By default ``"both"`` for ``(start, stop)`` and ``"left"``
+        for named groups, so that adjacent groups share no points.
+    agg : str | callable
+        Reduction for ``"aggregate"`` mode: ``"mean"``, ``"median"``, ``"sum"``,
+        ``"min"``, ``"max"``, or a function taking ``(data, axis=...)``.
+    src : instance of SourceSpaces | None
+        Source space, needed for a spatial radius search in source space.
+
+    Returns
+    -------
+    prepared : PreparedRsaData
+        The prepared data.
     """
+    _check_options(time_mode, freq_mode, space_mode, standardize, tfr_feature, log)
 
-    # Elements-mode specs are kept out of the aggregate feature pipeline (the
-    # native axis is preserved) and resolved into element_groups once the data,
-    # and thus the axis coordinates, exist.
-    time_pipeline, time_is_elements = _split_group_spec(time, time_mode, "time")
-    freq_pipeline, freq_is_elements = _split_group_spec(freq, freq_mode, "freq")
+    if isinstance(inst, (RsaData, np.ndarray)):
+        data, axes, coords = _read_array(inst, axes, coords, space, tfr)
+        kind, labels, geometry = "array", None, None
+    else:
+        data, axes, coords, kind, labels, geometry, sfreq = _read_mne(
+            inst, picks, space, src
+        )
+        if tfr is not None:
+            data, axes, coords = _compute_tfr(data, axes, coords, sfreq, tfr)
+    if "item" not in axes:
+        raise ValueError("The data needs an 'item' axis.")
 
-    opts = RsaPrepOptions(
-        axes=axes,
-        coords=coords,
-        time=time_pipeline,
-        freq=freq_pipeline,
-        tfr=tfr,
-        tfr_feature=tfr_feature,
-        log=log,
-        log_floor=log_floor,
-        standardize=standardize,
-        range_closed=range_closed,
-        agg=agg,
-    )
+    data, axes, coords = _project_feature(data, axes, coords, tfr_feature)
+    if log:
+        data = _safe_log10(data, log_floor)
 
-    # Detect the input kind and extract the named-axis data, MNE template,
-    # item labels, and spatial geometry. ``picks`` is applied here
-    # exactly once, inside the matching sensor branch.
-    input_kind, rsa_data, template, item_labels, space_description = _extract_input(
-        inst_or_data, opts, picks=picks, space_arg=space, src=src
-    )
-
-    if space_mode not in ("elements", "aggregate"):
-        raise ValueError("space_mode must be 'elements' or 'aggregate'.")
-
-    axis_groups: dict[str, AxisGroups] = {}
+    element_groups = {}
+    for axis, coarse, spec, mode in (
+        ("freq", "band", freq, freq_mode),
+        ("time", "window", time, time_mode),
+    ):
+        if spec is None:
+            continue
+        if axis not in axes:
+            raise ValueError(f"Cannot select {axis!r}: the data has no such axis.")
+        values = np.asarray(coords[axis], dtype=float)
+        if _is_plain_range(spec):
+            if mode == "elements":
+                raise ValueError(f"{axis}_mode='elements' needs named ranges.")
+            keep = _in_range(values, spec, range_closed or "both", axis)
+            data = np.take(data, keep, axis=axes.index(axis))
+            coords[axis] = values[keep]
+            continue
+        groups = _named_ranges(values, spec, range_closed or "left", axis)
+        if mode == "elements":
+            element_groups[axis] = groups
+            continue
+        if tfr_feature in _COMPONENTS:
+            raise ValueError(
+                f"Named {axis} aggregation does not work with tfr_feature="
+                f"{tfr_feature!r}. Use a (start, stop) range or {axis}_mode='elements'."
+            )
+        data, axes, coords = _collapse(data, axes, coords, axis, coarse, groups, agg)
 
     if space_mode == "aggregate":
-        if space is None:
-            raise ValueError("space_mode='aggregate' requires space= groups.")
-        if space_description is None or space_description.patches is None:
-            raise ValueError(
-                "space_mode='aggregate' requires grouped space= input "
-                "(a mapping of group name to members / Labels)."
-            )
-        # Collapse each group's members to one signal: the space axis becomes a
-        # categorical 'roi' axis and the per-element geometry no longer applies.
-        # The membership is kept so the result can be back-filled across the
-        # original channels / vertices at assembly.
-        space_members = tuple(
-            (str(name), np.asarray(idx, dtype=int))
-            for name, idx in space_description.patches.items()
-        )
-        rsa_data = aggregate_space_groups(rsa_data, space_description.patches, agg=agg)
-        space_description = None
-        axis_groups["roi"] = AxisGroups("space", "aggregate", space_members)
+        if getattr(geometry, "patches", None) is None:
+            raise ValueError("space_mode='aggregate' needs groups in space=.")
+        groups, geometry = geometry.patches, None
+        data, axes, coords = _collapse(data, axes, coords, "space", "roi", groups, agg)
 
-    # Elements-mode numeric axes keep their native grid; record the member
-    # indices for the searchlight (one RSA per group).
-    if time_is_elements:
-        axis_groups["time"] = AxisGroups(
-            "time",
-            "elements",
-            _resolve_axis_groups(rsa_data, time, "time", range_closed),
-        )
-    if freq_is_elements:
-        axis_groups["freq"] = AxisGroups(
-            "freq",
-            "elements",
-            _resolve_axis_groups(rsa_data, freq, "freq", range_closed),
-        )
-
-    # Aggregate-mode numeric axes were collapsed by the feature pipeline; record
-    # the membership over the original grid so the result can be back-filled to
-    # the input MNE format at assembly.
-    _record_aggregate_groups(
-        axis_groups,
-        "time",
-        "window",
-        time,
-        time_mode,
-        template,
-        tfr,
-        range_closed,
-        rsa_data,
-    )
-    _record_aggregate_groups(
-        axis_groups,
-        "freq",
-        "band",
-        freq,
-        freq_mode,
-        template,
-        tfr,
-        range_closed,
-        rsa_data,
-    )
-
-    time_axis, time_is_grouped = _detect_axis(rsa_data.axes, "time", "window")
-    freq_axis, freq_is_grouped = _detect_axis(rsa_data.axes, "freq", "band")
+    if standardize == "features":
+        data = _zscore(data, axes.index("item"))
 
     return PreparedRsaData(
-        rsa_data=rsa_data,
-        input_kind=input_kind,
-        template=template,
-        item_labels=item_labels,
-        space=space_description,
-        time_axis=time_axis,
-        time_is_grouped=time_is_grouped,
-        freq_axis=freq_axis,
-        freq_is_grouped=freq_is_grouped,
-        axis_groups=axis_groups or None,
+        RsaData(data, axes, coords), kind, labels, geometry, element_groups
     )
 
 
-def _split_group_spec(
-    spec: AxisSpec, mode: GroupReduceMode, axis: str
-) -> tuple[AxisSpec, bool]:
-    """Return ``(spec_for_pipeline, is_elements)``.
+def source_roi_patches(stc, rois):
+    """Find the rows of a source estimate that belong to each label.
 
-    Aggregate specs flow into the feature pipeline unchanged. Elements specs are
-    diverted (``None`` to the pipeline so the native axis is preserved) and
-    flagged for later resolution into ``axis_groups``.
+    Parameters
+    ----------
+    stc : instance of SourceEstimate | VolSourceEstimate
+        Its vertices define the available source space.
+    rois : list of Label
+        The labels.
+
+    Returns
+    -------
+    patches : dict
+        Row indices of ``stc.data`` per label name.
+    kept_rois : list of Label
+        The labels with at least one vertex in ``stc``, in input order.
     """
+    patches, kept_rois = {}, []
+    for idx, roi in enumerate(rois):
+        name = getattr(roi, "name", None) or f"roi_{idx}"
+        if name in patches:
+            raise ValueError(f"Duplicate ROI name {name!r}.")
+        indices = _label_indices(stc, [roi])
+        if indices.size:
+            patches[name] = indices
+            kept_rois.append(roi)
+    return patches, kept_rois
 
-    if mode not in ("aggregate", "elements"):
-        raise ValueError(f"{axis}_mode must be 'aggregate' or 'elements'.")
-    if mode == "aggregate":
-        return spec, False
-    if not _is_named_range_spec(spec):
+
+def _check_options(time_mode, freq_mode, space_mode, standardize, feature, log):
+    for mode in (time_mode, freq_mode, space_mode):
+        if mode not in _MODES:
+            raise ValueError(f"Modes must be one of {_MODES}, got {mode!r}.")
+    if standardize not in (None, "features"):
+        raise ValueError("standardize must be None or 'features'.")
+    if feature not in ("power", "amplitude", *_COMPONENTS):
+        raise ValueError(f"Unknown tfr_feature {feature!r}.")
+    if log and feature in _COMPONENTS:
+        raise ValueError("log=True needs tfr_feature='power' or 'amplitude'.")
+
+
+def _read_array(inst, axes, coords, space, tfr):
+    if space is not None:
+        raise ValueError("space= needs MNE input, which carries the geometry.")
+    if tfr is not None:
         raise ValueError(
-            f"{axis}_mode='elements' requires named ranges, e.g. "
-            f"{axis}={{'early': (0, 0.2)}}."
+            "tfr= needs MNE input, which carries the timing. Compute the TFR with "
+            "mne.time_frequency.tfr_array_morlet() and pass the result instead."
         )
-    return None, True
+    if isinstance(inst, RsaData):
+        if axes is not None or coords is not None:
+            raise ValueError("axes and coords are not used with RsaData.")
+        return inst.data, list(inst.axes), dict(inst.coords)
+    if axes is None:
+        raise ValueError("axes is required when the data is an array.")
+    # RsaData checks the axes; complex values are projected to real ones later.
+    checked = RsaData(np.zeros(inst.shape), axes, coords)
+    return inst, list(checked.axes), dict(checked.coords)
 
 
-def _resolve_axis_groups(
-    rsa_data: RsaData, spec: AxisSpec, axis: str, range_closed: str | None
-) -> tuple[tuple[str, np.ndarray], ...]:
-    if axis not in rsa_data.axes:
+def _read_mne(inst, picks, space, src):
+    single = isinstance(inst, _SINGLE_TYPES)
+    if not single and not (
+        isinstance(inst, (list, tuple))
+        and len(inst) > 0
+        and isinstance(inst[0], _ITEM_TYPES)
+    ):
+        raise TypeError(
+            "inst must be an array, RsaData, Epochs, EpochsTFR, EpochsSpectrum, or a "
+            "list of Evoked, Spectrum, AverageTFR, SourceEstimate or "
+            f"VolSourceEstimate. Got {type(inst).__name__}."
+        )
+    items = [inst] if single else list(inst)
+    is_source = isinstance(items[0], _SOURCE_TYPES)
+    if picks is not None and not is_source:
+        items = [item.copy().pick(picks, exclude="bads") for item in items]
+    _check_compatible(items)
+    ref = items[0]
+
+    axes, coords = ["item", "space"], {}
+    if hasattr(ref, "freqs"):
+        axes.append("freq")
+        coords["freq"] = np.asarray(ref.freqs, dtype=float)
+    if hasattr(ref, "times"):
+        axes.append("time")
+        coords["time"] = np.asarray(ref.times, dtype=float)
+
+    if is_source:
+        data = np.stack([stc.data for stc in items])
+        sfreq = 1 / ref.tstep
+        patches = None if space is None else _source_patches(ref, space)
+        kind = "volume" if isinstance(ref, mne.VolSourceEstimate) else "surface"
+        vertices = tuple(np.asarray(verts) for verts in ref.vertices)
+        geometry = SourceSpace(vertices, src, patches, kind, ref.subject)
+    else:
+        kwargs = {"exclude": ()} if hasattr(ref, "freqs") else {}
+        if single:
+            data = ref.get_data(**kwargs)
+        else:
+            data = np.stack([item.get_data(**kwargs) for item in items])
+        sfreq = ref.info["sfreq"]
+        patches = None if space is None else _sensor_patches(ref.ch_names, space)
+        geometry = SensorSpace(tuple(ref.ch_names), ref.info, patches)
+        coords["space"] = np.asarray(ref.ch_names, dtype=object)
+    if data.ndim != len(axes):
         raise ValueError(
-            f"{axis}_mode='elements' was set but the prepared data has no "
-            f"{axis!r} axis to group."
+            "Spectral data with tapers or segments is not supported. Use "
+            "output='power', or a method that gives one estimate per item."
         )
-    return resolve_element_groups(
-        rsa_data.coords[axis], spec, range_closed=range_closed
+    labels = ref.events[:, 2] if single else None
+    return data, axes, coords, type(ref).__name__, labels, geometry, sfreq
+
+
+def _check_compatible(items):
+    ref = items[0]
+    for idx, item in enumerate(items[1:], 1):
+        same = True
+        if hasattr(ref, "ch_names"):
+            same &= item.ch_names == ref.ch_names
+        if hasattr(ref, "vertices"):
+            same &= len(item.vertices) == len(ref.vertices) and all(
+                np.array_equal(a, b) for a, b in zip(item.vertices, ref.vertices)
+            )
+        for attr in ("times", "freqs"):
+            if hasattr(ref, attr):
+                a, b = getattr(item, attr), getattr(ref, attr)
+                same &= len(a) == len(b) and np.allclose(a, b)
+        if not same:
+            raise ValueError(
+                f"Item {idx} does not match item 0: all items need the same "
+                "channels or vertices, and the same times and frequencies."
+            )
+
+
+def _sensor_patches(ch_names, space):
+    if not isinstance(space, Mapping):
+        raise TypeError("space= for sensor input must map group names to channels.")
+    patches = {}
+    for name, members in space.items():
+        unknown = sorted(set(members) - set(ch_names))
+        if unknown:
+            raise ValueError(f"Group {name!r} has unknown channels: {unknown}.")
+        patches[str(name)] = np.array([ch_names.index(ch) for ch in members])
+    return patches
+
+
+def _source_patches(stc, space):
+    if isinstance(space, Mapping):
+        entries = [
+            (name, labels if isinstance(labels, (list, tuple)) else [labels])
+            for name, labels in space.items()
+        ]
+        patches = {str(name): _label_indices(stc, labels) for name, labels in entries}
+        patches = {name: idx for name, idx in patches.items() if idx.size}
+    else:
+        patches, _ = source_roi_patches(stc, space)
+    if not patches:
+        raise ValueError("No group in space= has vertices in the source estimates.")
+    return patches
+
+
+def _label_indices(stc, labels):
+    """Return the rows of ``stc.data`` covered by labels or vertex numbers."""
+    offsets = np.cumsum([0, *(len(verts) for verts in stc.vertices)])
+    indices = [np.zeros(0, int)]
+    for label in labels:
+        if isinstance(label, mne.BiHemiLabel):
+            indices.append(_label_indices(stc, [label.lh, label.rh]))
+        elif isinstance(label, mne.Label):
+            hemi = 1 if label.hemi == "rh" else 0
+            if hemi < len(stc.vertices):
+                verts = stc.vertices[hemi]
+                used = label.get_vertices_used(verts)
+                indices.append(np.searchsorted(verts, used) + offsets[hemi])
+        else:
+            used = np.intersect1d(label, stc.vertices[0])
+            indices.append(np.searchsorted(stc.vertices[0], used))
+    return np.unique(np.concatenate(indices))
+
+
+def _compute_tfr(data, axes, coords, sfreq, tfr):
+    if "time" not in axes or "freq" in axes:
+        raise ValueError("tfr= needs time-domain input.")
+    if "freqs" not in tfr:
+        raise ValueError("tfr= must include 'freqs'.")
+    data = tfr_array_morlet(data, sfreq, output="complex", **tfr)
+    decim = tfr.get("decim", 1)
+    times = coords["time"][
+        slice(None, None, decim) if isinstance(decim, int) else decim
+    ]
+    freqs = np.asarray(tfr["freqs"], dtype=float)
+    return data, axes[:2] + ["freq", "time"], {**coords, "freq": freqs, "time": times}
+
+
+def _project_feature(data, axes, coords, feature):
+    """Project complex data onto real values."""
+    if not np.iscomplexobj(data):
+        if feature != "power":
+            raise ValueError(f"tfr_feature={feature!r} needs complex data.")
+        return data, axes, coords
+    amplitude = np.abs(data)
+    if feature == "power":
+        return amplitude**2, axes, coords
+    if feature == "amplitude":
+        return amplitude, axes, coords
+    if "component" in axes:
+        raise ValueError(f"tfr_feature={feature!r} adds a 'component' axis.")
+    # Unit phasors give sin and cos of the phase; zero amplitude has no phase.
+    phasor = np.divide(data, amplitude, out=np.zeros_like(data), where=amplitude > 0)
+    parts = {
+        "real": data.real,
+        "imag": data.imag,
+        "amplitude": amplitude,
+        "sin_phase": phasor.imag,
+        "cos_phase": phasor.real,
+    }
+    names = _COMPONENTS[feature]
+    data = np.stack([parts[name] for name in names], axis=-1)
+    return data, [*axes, "component"], {**coords, "component": np.array(names, object)}
+
+
+def _safe_log10(data, floor=None):
+    """Take the log10, clipping values below ``floor`` to avoid ``-inf``."""
+    if floor is None:
+        positive = data[np.isfinite(data) & (data > 0)]
+        floor = np.median(positive) * 1e-6 if positive.size else 0
+        floor = max(floor, np.finfo(float).tiny)
+    if floor <= 0:
+        raise ValueError("log_floor must be positive.")
+    return np.log10(np.maximum(data, floor))
+
+
+def _is_plain_range(spec):
+    return (
+        isinstance(spec, (tuple, list))
+        and len(spec) == 2
+        and all(isinstance(limit, Number) for limit in spec)
     )
 
 
-def _original_axis_grid(
-    axis: str, template: RsaTemplate, tfr: Mapping[str, Any] | None
-) -> np.ndarray | None:
-    """Recover the original ``time`` / ``freq`` grid for aggregate back-fill.
-
-    Returns ``None`` when the grid is not recoverable (e.g. an abstract input
-    with no template, or a Morlet freq axis with no ``tfr['freqs']``), in which
-    case the aggregate result simply stays coarse and assembly falls back.
-    """
-
-    if axis == "time":
-        times = getattr(template, "times", None)
-        return None if times is None else np.asarray(times, dtype=float)
-    freqs = getattr(template, "freqs", None)
-    if freqs is None and tfr is not None:
-        freqs = tfr.get("freqs")
-    return None if freqs is None else np.asarray(freqs, dtype=float)
+def _in_range(values, limits, closed, name):
+    """Return the indices of ``values`` within ``limits``."""
+    if closed not in ("both", "left", "right", "neither"):
+        raise ValueError("range_closed must be 'both', 'left', 'right' or 'neither'.")
+    start, stop = limits
+    if stop <= start:
+        raise ValueError(f"Range {name!r} needs stop > start, got {limits}.")
+    lower = values >= start if closed in ("both", "left") else values > start
+    upper = values <= stop if closed in ("both", "right") else values < stop
+    indices = np.flatnonzero(lower & upper)
+    if indices.size == 0:
+        raise ValueError(f"Range {name!r} {limits} contains no values.")
+    return indices
 
 
-def _record_aggregate_groups(
-    axis_groups: dict[str, AxisGroups],
-    original_axis: str,
-    coarse_axis: str,
-    spec: AxisSpec,
-    mode: GroupReduceMode,
-    template: RsaTemplate,
-    tfr: Mapping[str, Any] | None,
-    range_closed: str | None,
-    rsa_data: RsaData,
-) -> None:
-    if mode != "aggregate" or not _is_named_range_spec(spec):
-        return
-    if coarse_axis not in rsa_data.axes:
-        return
-    grid = _original_axis_grid(original_axis, template, tfr)
-    if grid is None:
-        return
-    members = resolve_element_groups(grid, spec, range_closed=range_closed)
-    axis_groups[coarse_axis] = AxisGroups(original_axis, "aggregate", members, grid)
+def _named_ranges(values, spec, closed, axis):
+    groups = {
+        str(name): _in_range(values, limits, closed, name)
+        for name, limits in dict(spec).items()
+    }
+    if not groups:
+        raise ValueError(f"{axis}= needs at least one range.")
+    return groups
 
 
-def _detect_axis(
-    axes: Sequence[str], native: str, grouped: str
-) -> tuple[str | None, bool]:
-    if grouped in axes:
-        return grouped, True
-    if native in axes:
-        return native, False
-    return None, False
+def _collapse(data, axes, coords, axis, new_axis, groups, agg):
+    """Reduce each group of an axis to one value and rename the axis."""
+    if not callable(agg) and agg not in _AGGREGATORS:
+        raise ValueError(f"agg must be callable or one of {_AGGREGATORS}.")
+    reduce = agg if callable(agg) else getattr(np, agg)
+    pos = axes.index(axis)
+    pieces = [reduce(np.take(data, idx, axis=pos), axis=pos) for idx in groups.values()]
+    coords = {key: value for key, value in coords.items() if key != axis}
+    coords[new_axis] = np.array(list(groups), dtype=object)
+    return np.stack(pieces, axis=pos), [*axes[:pos], new_axis, *axes[pos + 1 :]], coords
 
 
-_PREP_KWARG_NAMES: frozenset[str] = frozenset(
-    inspect.signature(prepare_rsa_data).parameters
-) - {"inst_or_data"}
-
-
-def prepare_rsa_data_kwarg_names() -> frozenset[str]:
-    """Return the keyword names ``prepare_rsa_data`` accepts.
-
-    Derived once from the ``prepare_rsa_data`` signature (minus the
-    ``inst_or_data`` positional). Single source of truth for the prep / RSA
-    kwarg split shared by ``compute_rsa`` and the dynamic frontends, so none of
-    them hand-maintain a parallel grammar.
-    """
-    return _PREP_KWARG_NAMES
-
-
-__all__ = [
-    "prepare_rsa_data",
-    "prepare_rsa_data_kwarg_names",
-    "PreparedRsaData",
-    "SpaceDescription",
-    "RsaInputKind",
-    "RsaTemplate",
-]
+def _zscore(data, item_axis):
+    mean = np.nanmean(data, axis=item_axis, keepdims=True)
+    std = np.nanstd(data, axis=item_axis, keepdims=True)
+    return (data - mean) / np.where(std > 0, std, 1)

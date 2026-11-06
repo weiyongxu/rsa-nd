@@ -35,8 +35,9 @@ and source estimates. `rsa-nd` builds on that engine and adds:
   `Evoked`, `AverageTFR`, `Spectrum` or source estimates, plus any named N-D
   array.
 - **One vocabulary for every dimension:** `time`, `freq` and `space` are all
-  searchable axes. Each can be searched with a radius, kept as a single value,
-  grouped into named bands or windows, or pooled into the features.
+  searchable axes. Each can be searched with a radius, one element at a time, or
+  by named group, or pooled into the features. Named groups can also be averaged
+  into bands, windows and regions.
 - **Time-frequency features:** power, amplitude, phase, real/imaginary and
   amplitude/phase projections of complex TFRs.
 - **Source ROI time-frequency RSA:** pass source estimates and `mne.Label`s
@@ -52,7 +53,7 @@ and source estimates. `rsa-nd` builds on that engine and adds:
 pip install git+https://github.com/weiyongxu/rsa-nd.git
 ```
 
-`rsa-nd` needs Python 3.10+, MNE-Python 1.7+ and mne-rsa 1.x.
+`rsa-nd` needs Python 3.10+, MNE-Python 1.8+ and mne-rsa 1.x.
 
 ## Quick start
 
@@ -125,23 +126,28 @@ evoked_like = result.to_mne()
 
 ## Examples
 
-Runnable demos are in `examples/`. Those that use real data download the MNE
-sample dataset on first use.
+Short examples are in `examples/`. The sensor and source examples download the
+MNE sample dataset on first use.
 
-```bash
-uv run python examples/demo_rsa_toy_spectral.py
-uv run python examples/demo_rsa_sensor_feature_comparison.py
-uv run python examples/demo_rsa_source_roi_searchlight.py
-```
+| Example | Shows |
+| --- | --- |
+| `plot_any_dimensions.py` | Searching any axes of simulated data, with named groups and several models |
+| `plot_sensor_tfr.py` | Time-frequency RSA on MEG sensors, using power and phase |
+| `plot_source_rois.py` | Time-frequency RSA in anatomical regions |
+| `plot_dynamic.py` | Recovering the lag between a changing model and neural data |
 
-`examples/demo_rsa_epochs_implementation_comparison.py` compares `rsa-nd`
-directly with `mne_rsa.rsa_epochs` on the same data.
+## Testing
+
+`tests/test_combinations.py` checks every input type and dimension setup against
+an independent brute-force calculation, and `tests/test_rsa.py` confirms that
+results match `mne_rsa.rsa_epochs`, `rsa_evokeds` and `rsa_stcs`.
 
 ## Development
 
 ```bash
 uv sync
 uv run pytest tests/ -m "not slowtest"
+RSA_ND_ALL_CASES=1 uv run pytest tests/test_combinations.py  # all ~35,000 cases
 uv run ruff check .
 uv run sphinx-build -b html docs/source docs/build/html
 ```

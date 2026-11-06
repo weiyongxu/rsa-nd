@@ -1,44 +1,12 @@
-"""RSA over any EEG/MEG features and dimensions.
-
-The package exposes a generic real-valued N-D RSA frontend, typed data
-preparation, and dynamic / source-space workflows, built on MNE-Python and
-mne-rsa.
-"""
+"""RSA over any EEG/MEG features and dimensions."""
 
 from importlib.metadata import PackageNotFoundError, version
 
-from ._core import (
-    compute_rsa,
-    rsa_nd,
-)
-from ._dynamic import (
-    rsa_dynamic,
-    rsa_dynamic_windows,
-)
-from ._features import safe_log10_power as safe_log10_power
-from ._prepare import prepare_rsa_data
-from ._source import source_roi_patches
-from ._types import (
-    DynamicInfo,
-    PreparedRsaData,
-    RsaData,
-    RsaResult,
-)
-from ._types import (
-    RsaInputKind as RsaInputKind,
-)
-from ._types import (
-    RsaTemplate as RsaTemplate,
-)
-from ._types import (
-    SensorSpace as SensorSpace,
-)
-from ._types import (
-    SourceSpace as SourceSpace,
-)
-from ._types import (
-    SpaceDescription as SpaceDescription,
-)
+from ._data import PreparedRsaData, RsaData, SensorSpace, SourceSpace
+from ._dynamic import rsa_dynamic, rsa_dynamic_windows
+from ._prepare import prepare_rsa_data, source_roi_patches
+from ._result import DynamicInfo, RsaResult
+from ._rsa import compute_rsa, rsa_nd
 
 try:
     __version__ = version("rsa-nd")
@@ -47,14 +15,16 @@ except PackageNotFoundError:  # running from a source tree that is not installed
 
 __all__ = [
     "__version__",
-    "RsaData",
-    "RsaResult",
     "DynamicInfo",
     "PreparedRsaData",
+    "RsaData",
+    "RsaResult",
+    "SensorSpace",
+    "SourceSpace",
     "compute_rsa",
-    "rsa_nd",
+    "prepare_rsa_data",
     "rsa_dynamic",
     "rsa_dynamic_windows",
-    "prepare_rsa_data",
+    "rsa_nd",
     "source_roi_patches",
 ]
