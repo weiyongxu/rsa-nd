@@ -1,0 +1,34 @@
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Byte-compiled / optimized files
+__pycache__/
+*.pyc
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Test reports
+.pytest_cache/
+htmlcov/
+.coverage
+
+# environment
+.venv/
+
+# IDE
+.cursor/
+.claude/
+.vscode/
+
+# Example output figures
+examples/output/
+examples/*.html
+outputs/
+
+# Generated Sphinx-Gallery output
+docs/source/auto_examples/
+docs/source/sg_execution_times.rst
