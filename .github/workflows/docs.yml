@@ -29,12 +29,21 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
       - run: uv sync
-      # The examples run during the build, and most need the MNE sample dataset.
+      # The examples run during the build. Most need the MNE sample dataset, and
+      # the group example needs the first 10 participants of the LIMO dataset.
+      # Change the key when the data change, so that the new cache is saved.
       - uses: actions/cache@v4
         with:
           path: ~/mne_data
-          key: mne-sample-data
+          key: mne-data-sample-limo10
+          restore-keys: mne-sample-data
       - run: uv run python -c "import mne; mne.datasets.sample.data_path(update_path=True)"
+      - run: |
+          uv run python -c "
+          import mne
+          for subject in range(1, 11):
+              mne.datasets.limo.data_path(subject, update_path=True)
+          "
       # The overview example draws brains with PyVista, which needs a display.
       - uses: pyvista/setup-headless-display-action@v3
       - run: uv run sphinx-build -b html docs/source docs/build/html --keep-going
