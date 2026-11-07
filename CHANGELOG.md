@@ -23,9 +23,10 @@ imported `mne_ez.rsa` should import `rsa_nd` instead. Result files written by
   keep the same colours in every figure, and lines carry their own labels instead
   of a legend.
 - A new group example runs RSA for 10 participants of the LIMO EEG dataset, with
-  two models that each control for the other, then tests the scores across
-  participants with a cluster permutation test over channels and time. The docs
-  build downloads and caches these participants.
+  a face model whose differences grow with image clarity, controlled for phase
+  coherence and clarity. It then tests the scores across participants with a
+  cluster permutation test over channels and time. The docs build downloads and
+  caches these participants.
 
 ### Changed
 - Rewritten for simplicity, in the style of NumPy and MNE-Python: about a third of

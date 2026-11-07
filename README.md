@@ -130,8 +130,8 @@ example, `search_axes=("space", "time")` gives a sensor map for each band.
 
 [`examples/plot_group_stats.py`](examples/plot_group_stats.py) runs a complete
 version on real data: 10 participants of the LIMO EEG dataset, a channel
-searchlight over time for two models, and a cluster test across participants that
-joins neighbouring channels and times. It lists `"time"` before `"space"` in
+searchlight over time for three models that each control for the others, and a
+cluster test across participants that joins neighbouring channels and times. It lists `"time"` before `"space"` in
 `search_axes`, so that the scores come out as times × channels, the layout that
 MNE's cluster tests expect.
 
