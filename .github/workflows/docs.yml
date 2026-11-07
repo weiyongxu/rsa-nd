@@ -29,6 +29,14 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
       - run: uv sync
+      # The examples run during the build, and most need the MNE sample dataset.
+      - uses: actions/cache@v4
+        with:
+          path: ~/mne_data
+          key: mne-sample-data
+      - run: uv run python -c "import mne; mne.datasets.sample.data_path(update_path=True)"
+      # The overview example draws brains with PyVista, which needs a display.
+      - uses: pyvista/setup-headless-display-action@v3
       - run: uv run sphinx-build -b html docs/source docs/build/html --keep-going
       - uses: actions/upload-pages-artifact@v3
         with:

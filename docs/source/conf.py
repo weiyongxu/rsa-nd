@@ -10,6 +10,9 @@ from importlib.metadata import version as package_version
 # Add the package to the path so Sphinx can import it
 sys.path.insert(0, os.path.abspath("../../src"))
 
+# Keep MNE's progress messages out of the example pages
+os.environ["MNE_LOGGING_LEVEL"] = "WARNING"
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -57,7 +60,7 @@ sphinx_gallery_conf = {
     "gallery_dirs": "auto_examples",  # Where to save generated gallery
     "filename_pattern": "/plot_",  # Only process files starting with plot_
     "ignore_pattern": r"__init__\.py",  # Ignore __init__.py
-    "plot_gallery": False,  # Don't execute examples (they need sample data)
+    "within_subsection_order": "FileNameSortKey",  # Overview first
     "download_all_examples": False,  # Don't create a zip of all examples
     "remove_config_comments": True,  # Remove sphinx-gallery config comments
     "expected_failing_examples": [],  # List of examples expected to fail

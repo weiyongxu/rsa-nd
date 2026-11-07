@@ -17,7 +17,8 @@ from scipy.spatial.distance import pdist
 from rsa_nd import compute_rsa
 
 # %%
-# Compute single-trial source estimates for 20 trials per condition.
+# Compute single-trial source estimates for 20 trials per condition: tones in the
+# left ear and checkerboards in the left visual field.
 data_path = mne.datasets.sample.data_path()
 meg_path = data_path / "MEG" / "sample"
 raw = mne.io.read_raw_fif(meg_path / "sample_audvis_filt-0-40_raw.fif")
@@ -29,7 +30,6 @@ epochs = mne.Epochs(
     tmin=-0.2,
     tmax=0.5,
     picks="meg",
-    decim=2,
     preload=True,
 )
 epochs = mne.concatenate_epochs([epochs[name][:20] for name in ("al", "vl")])
@@ -55,7 +55,7 @@ result = compute_rsa(
     stcs,
     model_rdm,
     space=labels,
-    tfr={"freqs": [8.0, 10.0, 12.0], "n_cycles": 2.0},
+    tfr={"freqs": [8.0, 10.0, 12.0], "n_cycles": 2.0, "decim": 2},
     log=True,
     search_axes=("space", "time"),
     radii={"time": 0.04},
@@ -63,10 +63,42 @@ result = compute_rsa(
 )
 print(result)
 
-fig, ax = plt.subplots()
-for name, scores in zip(result.coords["space"], result.rsa):
-    ax.plot(result.coords["time"], scores, label=name)
-ax.set(xlabel="Time (s)", ylabel="Spearman RSA")
-ax.legend(fontsize="small")
+# %%
+# Plot each region, in each hemisphere. The checkerboards were in the left visual
+# field, which projects to the right hemisphere, so the right visual regions tell
+# the modalities apart best.
+scores = dict(zip(result.coords["space"], result.rsa))
+times = result.coords["time"]
+regions = {
+    "Auditory cortex": {
+        "transversetemporal": "Transverse temporal",
+        "superiortemporal": "Superior temporal",
+    },
+    "Visual cortex": {
+        "pericalcarine": "Pericalcarine",
+        "lateraloccipital": "Lateral occipital",
+    },
+}
+hemis = {"lh": ("left", "#2a78d6"), "rh": ("right", "#eb6834")}
+
+fig = plt.figure(figsize=(7.5, 2.9), layout="constrained")
+axs = []
+for subfig, (group, names) in zip(fig.subfigures(1, 2), regions.items()):
+    subfig.suptitle(group, fontweight="bold")
+    for ax, (name, title) in zip(subfig.subplots(1, 2), names.items()):
+        if axs:
+            ax.sharey(axs[0])
+        axs.append(ax)
+        ax.axhline(0, color="0.85", linewidth=1, zorder=0)
+        ax.axvline(0, color="0.85", linewidth=1, zorder=0)
+        for hemi, (_, color) in hemis.items():
+            ax.plot(times, scores[f"{name}-{hemi}"], color=color, linewidth=2)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.set_title(title, fontsize="medium")
+fig.supxlabel("Time (s)", fontsize="medium")
+axs[0].set_ylabel("Spearman r")
+for idx, (side, color) in enumerate(hemis.values()):
+    axs[1].text(0.03, 0.97 - idx * 0.12, f"{side} hemisphere", color=color, size=9,
+                fontweight="bold", va="top", transform=axs[1].transAxes)  # fmt: skip
 
 plt.show()

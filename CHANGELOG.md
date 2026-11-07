@@ -11,6 +11,18 @@ First standalone version, split out of the `rsa` module of `mne-ez`. Code that
 imported `mne_ez.rsa` should import `rsa_nd` instead. Result files written by
 `mne-ez` still load.
 
+### Documentation
+- The README and docs explain the gap the package fills and how it fits a real
+  MNE and mne-rsa analysis.
+- A schematic shows how the package works and what the choice of axes changes.
+- A new overview example searches brain parcels, frequency bands and time for two
+  models in one call, and provides the headline figure. The docs gallery now runs
+  the examples and shows their figures.
+- Each gallery figure now makes one point and marks the known answer: the
+  simulated effect, the true lag, or the hemisphere that the stimuli reach. Bands
+  keep the same colours in every figure, and lines carry their own labels instead
+  of a legend.
+
 ### Changed
 - Rewritten for simplicity, in the style of NumPy and MNE-Python: about a third of
   the previous code, in five modules.
