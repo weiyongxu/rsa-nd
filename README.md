@@ -128,6 +128,13 @@ t_obs, clusters, p_values, _ = permutation_cluster_1samp_test(np.stack(scores), 
 To ask a different question, change only the `compute_rsa()` arguments. For
 example, `search_axes=("space", "time")` gives a sensor map for each band.
 
+[`examples/plot_group_stats.py`](examples/plot_group_stats.py) runs a complete
+version on real data: 10 participants of the LIMO EEG dataset, a channel
+searchlight over time for two models, and a cluster test across participants that
+joins neighbouring channels and times. It lists `"time"` before `"space"` in
+`search_axes`, so that the scores come out as times × channels, the layout that
+MNE's cluster tests expect.
+
 ## Install
 
 ```bash
@@ -208,7 +215,8 @@ evoked_like = result.to_mne()
 ## Examples
 
 Short examples are in `examples/`. The sensor and source examples download the
-MNE sample dataset on first use.
+MNE sample dataset on first use, and the group example downloads 10 participants
+of the LIMO dataset (about 1.2 GB, and it needs `pandas`).
 
 | Example | Shows |
 | --- | --- |
@@ -217,6 +225,7 @@ MNE sample dataset on first use.
 | `plot_sensor_tfr.py` | Time-frequency RSA on MEG sensors, using power and phase |
 | `plot_source_rois.py` | Time-frequency RSA in anatomical regions |
 | `plot_dynamic.py` | Recovering the lag between a changing model and neural data |
+| `plot_group_stats.py` | RSA for each of 10 EEG participants, then a cluster permutation test across them |
 
 ## Testing
 

@@ -62,6 +62,7 @@ dev = [
   "furo>=2025.9.25",
   "sphinx-gallery>=0.20.0",
   "pillow>=12.0.0",
+  "pandas>=2.3.3",  # for mne.datasets.limo, in the group example
 ]
 
 # mne-rsa pulls pyside6; >=6.10 only ships manylinux_2_34 wheels, which
