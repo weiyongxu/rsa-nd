@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-08
+
 First standalone version, split out of the `rsa` module of `mne-ez`. Code that
 imported `mne_ez.rsa` should import `rsa_nd` instead. Result files written by
 `mne-ez` still load.
@@ -57,3 +59,6 @@ imported `mne_ez.rsa` should import `rsa_nd` instead. Result files written by
 - Lists of items must now share times and frequencies, not just channels.
 - `n_folds` splitters and callables no longer break `save()`.
 - Labels spanning both hemispheres (`BiHemiLabel`) now work with `space=`.
+
+[Unreleased]: https://github.com/weiyongxu/rsa-nd/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/weiyongxu/rsa-nd/releases/tag/v0.1.0
