@@ -55,3 +55,24 @@ jobs:
       - run: uv sync
       - run: uv pip install mne==1.8.0
       - run: uv run --no-sync pytest tests/ -m "not slowtest"
+
+  # The slow tests compare results with mne-rsa on the MNE sample dataset. The
+  # cache holds only the sample data; the docs workflow has its own, larger cache.
+  slow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - run: uv sync
+      - uses: actions/cache@v4
+        with:
+          path: ~/mne_data
+          key: mne-sample-data
+      - run: uv run python -c "import mne; mne.datasets.sample.data_path(update_path=True)"
+      - run: uv run pytest tests/ -m slowtest
