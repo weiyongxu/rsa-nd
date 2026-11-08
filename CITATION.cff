@@ -6,6 +6,8 @@ authors:
   - family-names: Xu
     given-names: Weiyong
     email: weiyong.w.xu@jyu.fi
+    affiliation: "Department of Psychology, University of Jyväskylä, Finland"
+    orcid: "https://orcid.org/0000-0003-4453-9836"
 repository-code: "https://github.com/weiyongxu/rsa-nd"
 license: MIT
 keywords:
