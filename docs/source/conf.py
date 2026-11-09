@@ -72,11 +72,6 @@ sphinx_gallery_conf = {
 html_theme = "furo"
 html_static_path = ["_static"]
 
-# Theme options for Furo
-html_theme_options = {
-    "sidebar_hide_name": False,
-}
-
 # -- Options for intersphinx extension ---------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/intersphinx.html#configuration
 

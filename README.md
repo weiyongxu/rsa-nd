@@ -3,6 +3,8 @@
 **Representational similarity analysis (RSA) over any EEG/MEG features and
 dimensions.**
 
+Documentation and example gallery: <https://weiyongxu.github.io/rsa-nd/>
+
 `rsa-nd` extends [MNE-Python](https://mne.tools/) and
 [mne-rsa](https://mne.tools/mne-rsa/). Give it an MNE object or a named N-D
 array and say which axes to search over. It builds the feature tensor, runs the
@@ -131,9 +133,9 @@ example, `search_axes=("space", "time")` gives a sensor map for each band.
 [`examples/plot_06_group_stats.py`](examples/plot_06_group_stats.py) runs a complete
 version on real data: 10 participants of the LIMO EEG dataset, a channel
 searchlight over time for three models that each control for the others, and a
-cluster test across participants that joins neighbouring channels and times. It lists `"time"` before `"space"` in
-`search_axes`, so that the scores come out as times × channels, the layout that
-MNE's cluster tests expect.
+cluster test across participants that joins neighbouring channels and times.
+It lists `"time"` before `"space"` in `search_axes`, so that the scores come out
+as times × channels, the layout that MNE's cluster tests expect.
 
 ## Install
 
@@ -214,9 +216,11 @@ evoked_like = result.to_mne()
 
 ## Examples
 
-Short examples are in `examples/`. The sensor and source examples download the
-MNE sample dataset on first use, and the group example downloads 10 participants
-of the LIMO dataset (about 1.2 GB, and it needs `pandas`).
+Short examples are in `examples/`, and the
+[online gallery](https://weiyongxu.github.io/rsa-nd/auto_examples/index.html)
+shows them with their figures. The sensor and source examples download the MNE
+sample dataset on first use, and the group example downloads 10 participants of
+the LIMO dataset (about 1.2 GB, and it needs `pandas`).
 
 | Example | Shows |
 | --- | --- |

@@ -1,8 +1,4 @@
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Byte-compiled / optimized files
+# Byte-compiled files
 __pycache__/
 *.pyc
 
@@ -11,15 +7,16 @@ build/
 dist/
 *.egg-info/
 
-# Test reports
+# Tool caches and test reports
 .pytest_cache/
+.ruff_cache/
 htmlcov/
 .coverage
 
-# environment
+# Environment
 .venv/
 
-# IDE
+# IDE and agent settings
 .cursor/
 .claude/
 .vscode/

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from _helpers import make_info
 from numpy.testing import assert_allclose, assert_array_equal
-from scipy.spatial.distance import pdist
+from scipy.spatial.distance import pdist, squareform
 
 from rsa_nd import RsaData, prepare_rsa_data, rsa_dynamic, rsa_dynamic_windows, rsa_nd
 
@@ -80,8 +80,11 @@ def test_lag_tolerance():
         rsa_dynamic(_data(), _rdms(5), model_times, lag_tolerance=-1, **kwargs)
 
 
-@pytest.mark.parametrize("single", (pdist(np.arange(7.0)[:, None]), 1 - np.eye(7)))
-def test_single_rdm_array(single):
+@pytest.mark.parametrize("condensed", (True, False))
+def test_single_rdm_array(condensed):
+    single = pdist(np.arange(7.0)[:, None])
+    if not condensed:
+        single = squareform(single)
     result = rsa_dynamic(_data(), single, [0.0], **METRIC)
     assert result.rsa.shape == (1, 10)
 

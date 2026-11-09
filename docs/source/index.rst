@@ -43,6 +43,9 @@ adds no new RSA maths: all scores still come from ``mne-rsa``.
          show which part of the cube one patch covers when searching time,
          frequency and time, all three axes, or frequency bands and time.
 
+The source code, issue tracker and changelog are on
+`GitHub <https://github.com/weiyongxu/rsa-nd>`_.
+
 .. toctree::
    :maxdepth: 2
 

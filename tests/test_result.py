@@ -8,7 +8,7 @@ from h5io import read_hdf5, write_hdf5
 from mne.time_frequency import AverageTFR, EpochsTFRArray, Spectrum
 from numpy.testing import assert_allclose, assert_array_equal
 from scipy.spatial.distance import pdist
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 
 from rsa_nd import (
     RsaResult,
@@ -241,11 +241,11 @@ def test_save_records_splitters_as_text(tmp_path):
         MODEL,
         axes=("item", "x"),
         labels=np.repeat(np.arange(N_ITEMS), 4),
-        n_folds=KFold(2),
+        n_folds=StratifiedKFold(2),  # every item in both folds
         **METRIC,
     )
     result.save(tmp_path / "r.h5")
-    assert "KFold" in RsaResult.load(tmp_path / "r.h5").info["n_folds"]
+    assert "StratifiedKFold" in RsaResult.load(tmp_path / "r.h5").info["n_folds"]
 
 
 def test_save_needs_overwrite(tmp_path):
