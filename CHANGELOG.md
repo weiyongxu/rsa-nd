@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-A cleanup with no change to any result.
+## [0.1.1] - 2026-11-09
+
+The first public release: a cleanup with no change to any result.
 
 ### Documentation
 - The examples are numbered in reading order, from `plot_01_overview.py` to
@@ -84,5 +86,6 @@ imported `mne_ez.rsa` should import `rsa_nd` instead. Result files written by
 - `n_folds` splitters and callables no longer break `save()`.
 - Labels spanning both hemispheres (`BiHemiLabel`) now work with `space=`.
 
-[Unreleased]: https://github.com/weiyongxu/rsa-nd/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/weiyongxu/rsa-nd/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/weiyongxu/rsa-nd/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/weiyongxu/rsa-nd/releases/tag/v0.1.0
