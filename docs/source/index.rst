@@ -44,7 +44,8 @@ adds no new RSA maths: all scores still come from ``mne-rsa``.
          frequency and time, all three axes, or frequency bands and time.
 
 The source code, issue tracker and changelog are on
-`GitHub <https://github.com/weiyongxu/rsa-nd>`_.
+`GitHub <https://github.com/weiyongxu/rsa-nd>`_. To cite ``rsa-nd``, use its DOI,
+`10.5281/zenodo.24088896 <https://doi.org/10.5281/zenodo.24088896>`_.
 
 .. toctree::
    :maxdepth: 2

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- The README, the documentation and `CITATION.cff` give the Zenodo DOI,
+  10.5281/zenodo.24088896, which always leads to the newest version.
+
 ## [0.1.1] - 2026-11-09
 
 The first public release: a cleanup with no change to any result.
