@@ -5,15 +5,17 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:  # Allow manual runs
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # full history + tags so hatch-vcs can derive the version
-      - uses: astral-sh/setup-uv@v7
+      # setup-uv has no major-version tags since v8, so pin a release.
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: "3.10"
           enable-cache: true
@@ -30,10 +32,10 @@ jobs:
       matrix:
         python-version: ["3.10", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
@@ -44,10 +46,10 @@ jobs:
   oldest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: "3.10"
           enable-cache: true
@@ -61,16 +63,16 @@ jobs:
   slow:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: "uv.lock"
       - run: uv sync
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/mne_data
           key: mne-sample-data
