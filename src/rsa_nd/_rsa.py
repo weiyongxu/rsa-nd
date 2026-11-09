@@ -202,6 +202,7 @@ def _prepare_from_kwargs(inst, kwargs):
 
 
 def _as_prepared(data, axes, coords):
+    """Wrap ``data`` in PreparedRsaData, checking the arguments that go with it."""
     if isinstance(data, PreparedRsaData):
         if axes is not None or coords is not None:
             raise ValueError("axes and coords are not used with PreparedRsaData.")
@@ -259,6 +260,8 @@ def _resolve_search(prepared, search_axes, radii):
     unknown = sorted(set(radii) - set(search_axes))
     if unknown:
         raise ValueError(f"radii has axes that are not searched: {unknown}.")
+    if any(radius is not None and radius < 0 for radius in radii.values()):
+        raise ValueError("Radii must be non-negative.")
     both = sorted(axis for axis in groups if radii.get(axis, 0) != 0)
     if both:
         raise ValueError(f"Axes {both} have named groups, so they take no radius.")
@@ -284,9 +287,8 @@ def _resolve_search(prepared, search_axes, radii):
 
 
 def _space_patches(space, radius):
+    """Return the spatial patches within ``radius`` of each element, and names."""
     names = space.names
-    if radius < 0:
-        raise ValueError("Radii must be non-negative.")
     if radius == 0:
         return [np.array([idx]) for idx in range(len(names))], names
     dist = space._distances(radius)
@@ -299,10 +301,9 @@ def _space_patches(space, radius):
 
 
 def _radius_patches(values, radius):
+    """Return the patches within ``radius`` of each coordinate, and the centres."""
     if len(np.unique(values)) != len(values):
         raise ValueError("Search axes cannot have duplicate coordinates.")
-    if radius < 0:
-        raise ValueError("Radii must be non-negative.")
     if not np.issubdtype(values.dtype, np.number):
         if radius != 0:
             raise ValueError("Axes with named coordinates only support a radius of 0.")

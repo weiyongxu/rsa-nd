@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+A cleanup with no change to any result.
+
+### Documentation
+- The examples are numbered in reading order, from `plot_01_overview.py` to
+  `plot_06_group_stats.py`, so the gallery shows them in the README's order.
+- The API pages show the parameter types written in the docstrings, such as
+  `mne.Info`, instead of the bare annotations of the data classes, such as
+  `object`: the docs no longer use `sphinx-autodoc-typehints`.
+
+### Internal
+- Every private helper has a one-line docstring.
+- The two checks of model RDMs have different names (`_check_model_rdms` and
+  `_check_dynamic_rdms`), and the radii are checked once, not per axis type.
+- Deprecation and future warnings fail the tests, as in mne-ez, and the
+  pre-commit hooks use the ruff and codespell versions of the lock file.
+
 ## [0.1.0] - 2026-11-08
 
 First standalone version, split out of the `rsa` module of `mne-ez`. Code that

@@ -58,7 +58,6 @@ dev = [
   "codespell",
   "pre-commit",
   "sphinx>=8.1.3",
-  "sphinx-autodoc-typehints>=3.0.1",
   "furo>=2025.9.25",
   "sphinx-gallery>=0.20.0",
   "pillow>=12.0.0",
@@ -81,7 +80,13 @@ packages = ["src/rsa_nd"]
 
 [tool.pytest.ini_options]
 markers = [
-  "slowtest: marks tests as slow (deselect with '-m \"not slowtest\"')",
+  "slowtest: needs the MNE sample data (deselect with '-m \"not slowtest\"')",
+]
+# Deprecated calls fail the tests, so they are fixed before MNE or other
+# dependencies remove them.
+filterwarnings = [
+  "error::DeprecationWarning",
+  "error::FutureWarning",
 ]
 
 [tool.ruff]
@@ -100,7 +105,6 @@ select = [
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
-    "E402",  # module level import not at top
     "B905",  # zip() without strict= (too verbose for typical use)
 ]
 

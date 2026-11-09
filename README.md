@@ -14,7 +14,7 @@ and coordinates.
 *One `compute_rsa()` call searches brain parcels, frequency bands and time, for two
 models at once. `mne-rsa` alone searches parcels and time. Data: one participant
 from the MNE sample dataset, shown without statistics. See
-[the code](examples/plot_00_overview.py).*
+[the code](examples/plot_01_overview.py).*
 
 ```python
 from rsa_nd import compute_rsa
@@ -128,7 +128,7 @@ t_obs, clusters, p_values, _ = permutation_cluster_1samp_test(np.stack(scores), 
 To ask a different question, change only the `compute_rsa()` arguments. For
 example, `search_axes=("space", "time")` gives a sensor map for each band.
 
-[`examples/plot_group_stats.py`](examples/plot_group_stats.py) runs a complete
+[`examples/plot_06_group_stats.py`](examples/plot_06_group_stats.py) runs a complete
 version on real data: 10 participants of the LIMO EEG dataset, a channel
 searchlight over time for three models that each control for the others, and a
 cluster test across participants that joins neighbouring channels and times. It lists `"time"` before `"space"` in
@@ -220,12 +220,12 @@ of the LIMO dataset (about 1.2 GB, and it needs `pandas`).
 
 | Example | Shows |
 | --- | --- |
-| `plot_00_overview.py` | Brain parcels by frequency band by time, for two models: the figure at the top of this page |
-| `plot_any_dimensions.py` | Searching any axes of simulated data, with named groups and several models |
-| `plot_sensor_tfr.py` | Time-frequency RSA on MEG sensors, using power and phase |
-| `plot_source_rois.py` | Time-frequency RSA in anatomical regions |
-| `plot_dynamic.py` | Recovering the lag between a changing model and neural data |
-| `plot_group_stats.py` | RSA for each of 10 EEG participants, then a cluster permutation test across them |
+| `plot_01_overview.py` | Brain parcels by frequency band by time, for two models: the figure at the top of this page |
+| `plot_02_any_dimensions.py` | Searching any axes of simulated data, with named groups and several models |
+| `plot_03_sensor_tfr.py` | Time-frequency RSA on MEG sensors, using power and phase |
+| `plot_04_source_rois.py` | Time-frequency RSA in anatomical regions |
+| `plot_05_dynamic.py` | Recovering the lag between a changing model and neural data |
+| `plot_06_group_stats.py` | RSA for each of 10 EEG participants, then a cluster permutation test across them |
 
 ## Testing
 
