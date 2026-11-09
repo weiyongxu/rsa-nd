@@ -22,12 +22,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # full history + tags so hatch-vcs can derive the version
       - uses: astral-sh/setup-uv@v10.3.3
         with:
-          python-version: "3.12"
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
+          python-version: "3.13"
       - run: uv sync
       # The examples run during the build. Most need the MNE sample dataset, and
       # the group example needs the first 10 participants of the LIMO dataset.

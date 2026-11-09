@@ -239,7 +239,7 @@ results match `mne_rsa.rsa_epochs`, `rsa_evokeds` and `rsa_stcs`.
 uv sync
 uv run pytest tests/ -m "not slowtest"
 RSA_ND_ALL_CASES=1 uv run pytest tests/test_combinations.py  # all ~35,000 cases
-uv run ruff check .
+uv run pre-commit run --all-files
 uv run sphinx-build -b html docs/source docs/build/html
 ```
 

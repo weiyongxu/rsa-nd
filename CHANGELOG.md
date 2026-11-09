@@ -22,8 +22,10 @@ A cleanup with no change to any result.
   `_check_dynamic_rdms`), and the radii are checked once, not per axis type.
 - Deprecation and future warnings fail the tests, as in mne-ez, and the
   pre-commit hooks use the ruff and codespell versions of the lock file.
-- CI uses the current, Node 24 versions of its GitHub actions, and the tests
-  can also be started by hand from the Actions tab.
+- CI has three test jobs instead of six: `lint` runs the pre-commit hooks,
+  `test` runs every test with Python 3.13, and `oldest` runs the fast tests
+  with Python 3.10 and MNE 1.8. The GitHub actions are their current, Node 24
+  versions, and the tests can also be started by hand from the Actions tab.
 
 ## [0.1.0] - 2026-11-08
 
