@@ -46,6 +46,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/weiyongxu/rsa-nd"
+Documentation = "https://weiyongxu.github.io/rsa-nd/"
 "Issue Tracker" = "https://github.com/weiyongxu/rsa-nd/issues"
 "Source Code" = "https://github.com/weiyongxu/rsa-nd"
 

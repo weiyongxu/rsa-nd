@@ -15,6 +15,8 @@ A cleanup with no change to any result.
 - The API pages show the parameter types written in the docstrings, such as
   `mne.Info`, instead of the bare annotations of the data classes, such as
   `object`: the docs no longer use `sphinx-autodoc-typehints`.
+- The README and the package metadata link to the online documentation, and
+  the documentation links back to GitHub.
 
 ### Internal
 - Every private helper has a one-line docstring.
@@ -22,6 +24,12 @@ A cleanup with no change to any result.
   `_check_dynamic_rdms`), and the radii are checked once, not per axis type.
 - Deprecation and future warnings fail the tests, as in mne-ez, and the
   pre-commit hooks use the ruff and codespell versions of the lock file.
+- CI has three test jobs instead of six: `lint` runs the pre-commit hooks,
+  `test` runs every test with Python 3.13, and `oldest` runs the fast tests
+  with Python 3.10 and MNE 1.8. The GitHub actions are their current, Node 24
+  versions, and the tests can also be started by hand from the Actions tab.
+- The tests run without warnings: two of them used a model or a fold split
+  without variance, which gave NaN correlations.
 
 ## [0.1.0] - 2026-11-08
 

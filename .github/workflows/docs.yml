@@ -20,19 +20,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@v7
+          fetch-depth: 0  # full history + tags so hatch-vcs can derive the version
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
-          python-version: "3.12"
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
+          python-version: "3.13"
       - run: uv sync
       # The examples run during the build. Most need the MNE sample dataset, and
       # the group example needs the first 10 participants of the LIMO dataset.
       # Change the key when the data change, so that the new cache is saved.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/mne_data
           key: mne-data-sample-limo10
@@ -45,20 +43,21 @@ jobs:
               mne.datasets.limo.data_path(subject, update_path=True)
           "
       # The overview example draws brains with PyVista, which needs a display.
-      - uses: pyvista/setup-headless-display-action@v3
+      - uses: pyvista/setup-headless-display-action@v5
       - run: uv run sphinx-build -b html docs/source docs/build/html --keep-going
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/build/html
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    # GitHub Pages needs a public repository on the free plan.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !github.event.repository.private
+    # Deploy from main, on a push or a manual run. GitHub Pages needs a public
+    # repository on the free plan.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && !github.event.repository.private
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
