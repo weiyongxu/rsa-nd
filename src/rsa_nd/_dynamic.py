@@ -69,7 +69,7 @@ def rsa_dynamic(
     if (radii or {}).get(dynamic_axis, 0) is None:
         raise ValueError("dynamic_axis cannot have a radius of None.")
     model_times = _check_times(model_times, "model_times")
-    rdms = _check_model_rdms(model_rdms, model_times)
+    rdms = _check_dynamic_rdms(model_rdms, model_times)
     if mode != "lagged":
         lags = None
     elif lags is None:
@@ -157,20 +157,10 @@ def rsa_dynamic_windows(
         The window length, in seconds.
     n_windows : int
         The number of windows.
-    mode : str
+    mode, dynamic_axis, lags, lag_tolerance, search_axes, radii
         See :func:`rsa_dynamic`.
     model_metric : str
         The :func:`scipy.spatial.distance.pdist` metric for the model RDMs.
-    dynamic_axis : str
-        See :func:`rsa_dynamic`.
-    lags : float | array-like of float | None
-        See :func:`rsa_dynamic`.
-    lag_tolerance : float | "auto" | None
-        See :func:`rsa_dynamic`.
-    search_axes : sequence of str
-        See :func:`rsa_dynamic`.
-    radii : dict | None
-        See :func:`rsa_dynamic`.
     random_state : int | Generator | None
         Seed or generator for placing the windows.
     **kwargs : dict
@@ -247,6 +237,7 @@ def rsa_dynamic_windows(
 
 
 def _check_times(times, name):
+    """Return ``times`` as floats, or raise unless they strictly increase."""
     times = np.asarray(times, dtype=float)
     if times.ndim != 1 or times.size == 0:
         raise ValueError(f"{name} must be a non-empty 1-D sequence.")
@@ -255,7 +246,8 @@ def _check_times(times, name):
     return times
 
 
-def _check_model_rdms(model_rdms, model_times):
+def _check_dynamic_rdms(model_rdms, model_times):
+    """Return one model RDM per model time, as a list of arrays."""
     if isinstance(model_rdms, np.ndarray):
         square = model_rdms.ndim == 2 and model_rdms.shape[0] == model_rdms.shape[1]
         if model_rdms.ndim == 1 or (square and len(model_times) == 1):
@@ -273,6 +265,7 @@ def _check_model_rdms(model_rdms, model_times):
 
 
 def _resolve_tolerance(model_times, lag_tolerance):
+    """Return the largest gap allowed to the nearest model time, or None."""
     if lag_tolerance is None:
         return None
     if lag_tolerance == "auto":
@@ -301,6 +294,7 @@ def _gather(full_rsa, pos, indices):
 
 
 def _window_length(window_s, times):
+    """Return the number of samples of ``times`` in ``window_s`` seconds."""
     if len(times) < 2:
         raise ValueError("Need at least two time points.")
     n_samples = round(window_s / np.median(np.diff(times)))

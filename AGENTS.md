@@ -12,10 +12,10 @@ uv run sphinx-build -b html docs/source docs/build/html  # Runs the examples
 ```
 
 The README figures are committed in `docs/source/_static/`. Regenerate them after
-changing `docs/make_concept_figure.py` or `examples/plot_00_overview.py`:
+changing `docs/make_concept_figure.py` or `examples/plot_01_overview.py`:
 ```bash
 uv run python docs/make_concept_figure.py
-MPLBACKEND=Agg uv run python -c "import runpy; runpy.run_path('examples/plot_00_overview.py')['fig'].savefig('docs/source/_static/overview.png', dpi=200)"
+MPLBACKEND=Agg uv run python -c "import runpy; runpy.run_path('examples/plot_01_overview.py')['fig'].savefig('docs/source/_static/overview.png', dpi=200)"
 ```
 
 ## Standards

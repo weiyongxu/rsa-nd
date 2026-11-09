@@ -201,6 +201,7 @@ def source_roi_patches(stc, rois):
 
 
 def _check_options(time_mode, freq_mode, space_mode, standardize, feature, log):
+    """Raise if an option of :func:`prepare_rsa_data` has no valid value."""
     for mode in (time_mode, freq_mode, space_mode):
         if mode not in _MODES:
             raise ValueError(f"Modes must be one of {_MODES}, got {mode!r}.")
@@ -213,6 +214,7 @@ def _check_options(time_mode, freq_mode, space_mode, standardize, feature, log):
 
 
 def _read_array(inst, axes, coords, space, tfr):
+    """Return the data, axes and coordinates of an array or RsaData."""
     if space is not None:
         raise ValueError("space= needs MNE input, which carries the geometry.")
     if tfr is not None:
@@ -232,6 +234,7 @@ def _read_array(inst, axes, coords, space, tfr):
 
 
 def _read_mne(inst, picks, space, src):
+    """Return the data, axes, coordinates, kind, labels, geometry and sfreq."""
     single = isinstance(inst, _SINGLE_TYPES)
     if not single and not (
         isinstance(inst, (list, tuple))
@@ -285,6 +288,7 @@ def _read_mne(inst, picks, space, src):
 
 
 def _check_compatible(items):
+    """Raise if the items differ in channels, vertices, times or frequencies."""
     ref = items[0]
     for idx, item in enumerate(items[1:], 1):
         same = True
@@ -306,6 +310,7 @@ def _check_compatible(items):
 
 
 def _sensor_patches(ch_names, space):
+    """Return the channel indices of each named group of channels."""
     if not isinstance(space, Mapping):
         raise TypeError("space= for sensor input must map group names to channels.")
     patches = {}
@@ -318,6 +323,7 @@ def _sensor_patches(ch_names, space):
 
 
 def _source_patches(stc, space):
+    """Return the rows of ``stc.data`` in each label or named group of labels."""
     if isinstance(space, Mapping):
         entries = [
             (name, labels if isinstance(labels, (list, tuple)) else [labels])
@@ -352,6 +358,7 @@ def _label_indices(stc, labels):
 
 
 def _compute_tfr(data, axes, coords, sfreq, tfr):
+    """Return the complex Morlet TFR of time-domain data, with a ``freq`` axis."""
     if "time" not in axes or "freq" in axes:
         raise ValueError("tfr= needs time-domain input.")
     if "freqs" not in tfr:
@@ -404,6 +411,7 @@ def _safe_log10(data, floor=None):
 
 
 def _is_plain_range(spec):
+    """Return whether ``spec`` is one ``(start, stop)`` range."""
     return (
         isinstance(spec, (tuple, list))
         and len(spec) == 2
@@ -427,6 +435,7 @@ def _in_range(values, limits, closed, name):
 
 
 def _named_ranges(values, spec, closed, axis):
+    """Return the indices of ``values`` in each named range."""
     groups = {
         str(name): _in_range(values, limits, closed, name)
         for name, limits in dict(spec).items()
@@ -449,6 +458,7 @@ def _collapse(data, axes, coords, axis, new_axis, groups, agg):
 
 
 def _zscore(data, item_axis):
+    """Z-score each feature across items; constant features become 0."""
     mean = np.nanmean(data, axis=item_axis, keepdims=True)
     std = np.nanstd(data, axis=item_axis, keepdims=True)
     return (data - mean) / np.where(std > 0, std, 1)

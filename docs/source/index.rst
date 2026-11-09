@@ -17,7 +17,7 @@ and returns a result that keeps its axis names and coordinates.
    One :func:`~rsa_nd.compute_rsa` call searches brain parcels, frequency bands
    and time, for two models at once. ``mne-rsa`` alone searches parcels and time.
    Data: one participant from the MNE sample dataset, shown without statistics.
-   See :doc:`the code <auto_examples/plot_00_overview>`.
+   See :doc:`the code <auto_examples/plot_01_overview>`.
 
 The gap it fills
 ----------------

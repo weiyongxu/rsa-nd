@@ -187,6 +187,7 @@ class RsaResult:
 
 
 def _to_mne(result):
+    """Return the MNE container that holds a result, or raise."""
     axes, coords = result.axes, result.coords
     if not axes:
         raise ValueError("to_mne() needs at least one search axis.")
@@ -223,6 +224,7 @@ def _to_mne(result):
 
 
 def _to_source_estimate(result, data, order):
+    """Return a per-vertex result as a SourceEstimate or VolSourceEstimate."""
     if "freq" in order:
         raise ValueError("to_mne() cannot represent source results with a 'freq' axis.")
     times = result.coords.get("time", np.zeros(1))
@@ -239,6 +241,7 @@ def _to_source_estimate(result, data, order):
 
 
 def _sfreq(times):
+    """Return the sampling frequency of ``times``, or 1 without two times."""
     return 1 / np.median(np.diff(times)) if times is not None and len(times) > 1 else 1
 
 
@@ -258,6 +261,7 @@ def _encode(obj):
 
 
 def _space_to_dict(space):
+    """Describe the spatial geometry in types that h5io can store."""
     if space is None:
         return {"kind": "none"}
     if isinstance(space, SensorSpace):
@@ -277,6 +281,7 @@ def _space_to_dict(space):
 
 
 def _space_from_dict(stored):
+    """Rebuild the spatial geometry from :func:`_space_to_dict`."""
     kind = (stored or {}).get("kind", "none")
     if kind == "none":
         return None
@@ -294,6 +299,7 @@ def _space_from_dict(stored):
 
 
 def _info_to_bytes(info):
+    """Return an Info as the bytes of a FIF file, which keeps every detail."""
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "rsa-info.fif")
         mne.io.write_info(path, info)
@@ -301,6 +307,7 @@ def _info_to_bytes(info):
 
 
 def _info_from_bytes(blob):
+    """Read an Info back from :func:`_info_to_bytes`."""
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "rsa-info.fif")
         np.asarray(blob, dtype=np.uint8).tofile(path)
@@ -308,12 +315,14 @@ def _info_from_bytes(blob):
 
 
 def _dynamic_to_dict(dynamic):
+    """Describe the dynamic RSA outputs in types that h5io can store."""
     if dynamic is None:
         return {"present": False}
     return {"present": True, **_encode(asdict(dynamic))}
 
 
 def _dynamic_from_dict(stored):
+    """Rebuild the dynamic RSA outputs from :func:`_dynamic_to_dict`."""
     if not stored or not stored.pop("present", False):
         return None
     return DynamicInfo(**stored)

@@ -31,7 +31,6 @@ extensions = [
     "sphinx.ext.napoleon",  # Support for NumPy-style docstrings
     "sphinx.ext.intersphinx",  # Link to other project docs (MNE-Python)
     "sphinx.ext.viewcode",  # Add links to highlighted source code
-    "sphinx_autodoc_typehints",  # Better type hint rendering
     "sphinx_gallery.gen_gallery",  # Auto-generate example gallery
 ]
 
