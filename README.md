@@ -1,5 +1,7 @@
 # rsa-nd
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24088896.svg)](https://doi.org/10.5281/zenodo.24088896)
+
 **Representational similarity analysis (RSA) over any EEG/MEG features and
 dimensions.**
 
@@ -249,7 +251,10 @@ uv run sphinx-build -b html docs/source docs/build/html
 
 ## Citing
 
-See [CITATION.cff](CITATION.cff). Please also cite
+Cite `rsa-nd` with its DOI,
+[10.5281/zenodo.24088896](https://doi.org/10.5281/zenodo.24088896), which always
+leads to the newest version. Zenodo also gives each version its own DOI, and
+[CITATION.cff](CITATION.cff) has the full reference. Please also cite
 [MNE-Python](https://mne.tools/stable/documentation/cite.html) and
 [mne-rsa](https://mne.tools/mne-rsa/).
 
