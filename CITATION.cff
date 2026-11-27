@@ -17,8 +17,8 @@ authors:
 doi: 10.5281/zenodo.24088896
 repository-code: "https://github.com/weiyongxu/rsa-nd"
 license: MIT
-version: "0.1.1"
-date-released: 2026-11-09
+version: "0.1.2"
+date-released: 2026-11-27
 keywords:
   - EEG
   - MEG

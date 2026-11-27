@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-27
+
+A fix for saving results; no change to any result.
+
 ### Fixed
 - Results whose geometry holds patches named by numbers, such as a searchlight
   computed once and keyed by centre vertex, failed to save. Patch names are now
@@ -95,6 +99,7 @@ imported `mne_ez.rsa` should import `rsa_nd` instead. Result files written by
 - `n_folds` splitters and callables no longer break `save()`.
 - Labels spanning both hemispheres (`BiHemiLabel`) now work with `space=`.
 
-[Unreleased]: https://github.com/weiyongxu/rsa-nd/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/weiyongxu/rsa-nd/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/weiyongxu/rsa-nd/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/weiyongxu/rsa-nd/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/weiyongxu/rsa-nd/releases/tag/v0.1.0
