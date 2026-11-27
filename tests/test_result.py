@@ -12,6 +12,7 @@ from sklearn.model_selection import StratifiedKFold
 
 from rsa_nd import (
     RsaResult,
+    SourceSpace,
     compute_rsa,
     prepare_rsa_data,
     rsa_dynamic,
@@ -214,6 +215,23 @@ def test_save_load_source_groups(tmp_path):
     assert_array_equal(loaded.space.patches["a-lh"], [0, 1])
     assert loaded.space.subject == "s"
     assert loaded.to_mne().ch_names == ["a-lh"]
+
+
+def test_save_load_numbered_patches(tmp_path):
+    # A searchlight computed once and keyed by centre vertex, then reused.
+    patches = {0: np.array([0, 1]), 1: np.array([0, 1, 2]), 2: np.array([1, 2])}
+    result = RsaResult(
+        rsa=np.zeros((1, 3)),
+        axes=("model", "space"),
+        coords={"model": np.array(["a"]), "space": np.arange(3)},
+        space=SourceSpace(vertices=(np.arange(2), np.arange(1)), patches=patches),
+    )
+    result.save(tmp_path / "r.h5")
+    loaded = RsaResult.load(tmp_path / "r.h5")
+    assert sorted(loaded.space.patches) == ["0", "1", "2"]
+    for name, rows in patches.items():
+        assert_array_equal(loaded.space.patches[str(name)], rows)
+    assert_array_equal(loaded.coords["space"], np.arange(3))
 
 
 def test_save_load_dynamic(tmp_path):

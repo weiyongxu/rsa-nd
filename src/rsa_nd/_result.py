@@ -269,15 +269,22 @@ def _space_to_dict(space):
             kind="sensor",
             channel_names=list(space.channel_names),
             info_fif=_info_to_bytes(space.info),
-            patches=space.patches,
+            patches=_patches_to_dict(space.patches),
         )
     return dict(
         kind="source",
         vertices={str(idx): verts for idx, verts in enumerate(space.vertices)},
-        patches=space.patches,
+        patches=_patches_to_dict(space.patches),
         estimate_kind=space.estimate_kind,
         subject=space.subject,
     )
+
+
+def _patches_to_dict(patches):
+    """Store patch names as text, because h5io only writes string keys."""
+    if patches is None:
+        return None
+    return {str(name): np.asarray(rows, dtype=int) for name, rows in patches.items()}
 
 
 def _space_from_dict(stored):
